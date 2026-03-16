@@ -46,5 +46,32 @@ class Reviewer:
                     else:
                         selected = files[page * page_size + int(answer)]
         
-        return selected
+        return f"./{self.review_directory}/{selected}"
             
+    def _review_string(self, string):
+        prompt = f"""
+        Review attached python code. Give me four sections, each with bullet points on possible improvements.
+        Don't give precise advice, just vague diagnoses e.g. Don't use magic numbers.
+        The four sections should be: Syntax errors, Good practice, Optimisation, Possible logical issues
+        Possible logical issues should be e.g. are you sure you're supposed to be printing X?
+        Code is below:
+
+        {string}
+        """
+        return 'Code is crap'
+
+    def review(self, file_path : str = None):
+        if file_path == None:
+            file_path = self.interactive_file_select()
+        
+        # Read file_path
+        try:
+            f = open(file_path, "r")
+            return {
+                'review': self._review_string(f.read())
+            }
+        except FileNotFoundError:
+            print('Review failed, file could not be found')
+
+        # print to console
+        return None

@@ -11,7 +11,11 @@ def main():
     print('TEST KEY: ', test_key)
     # Tell me all the files in project root
     reviewer = Reviewer()
-    print(reviewer.interactive_file_select())
+    review_obj = reviewer.review()
+    if review_obj is not None:
+        print(review_obj['review'])
+    else:
+        print('Something went wrong...')
 
 if __name__ == '__main__':
     main()
