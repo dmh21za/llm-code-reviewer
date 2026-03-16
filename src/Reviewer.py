@@ -1,8 +1,11 @@
 import os
+import ast
+import textwrap
+from openai import OpenAI
 
 class Reviewer:
     # Set file of reviewer than review it
-    def __init__(self, review_directory : str = None):
+    def __init__(self, groq_key : str, review_directory : str = None):
         print("Created a reviewer object successfully")
 
         if review_directory is None:
@@ -13,6 +16,7 @@ class Reviewer:
             review_directory += '/'
 
         self.review_directory = review_directory
+        self.groq_key = groq_key
 
     # Helper function for getting all file names in the review directory
     # Ignores sub directories and their contents
@@ -48,17 +52,71 @@ class Reviewer:
         
         return f"./{self.review_directory}/{selected}"
             
-    def _review_string(self, string):
-        prompt = f"""
-        Review attached python code. Give me four sections, each with bullet points on possible improvements.
-        Don't give precise advice, just vague diagnoses e.g. Don't use magic numbers.
-        The four sections should be: Syntax errors, Good practice, Optimisation, Possible logical issues
-        Possible logical issues should be e.g. are you sure you're supposed to be printing X?
-        Code is below:
+    def _clean_code(self, code: str) -> str:
+        """Remove prompt indentation and surrounding whitespace."""
+        return textwrap.dedent(code).strip()
 
-        {string}
-        """
-        return 'Code is crap'
+
+    def _check_syntax(self, code: str):
+        """Return syntax error if one exists."""
+        try:
+            ast.parse(code)
+            return None
+        except SyntaxError as e:
+            return f"SyntaxError: {e}"
+
+    def _prompt_groq(self, prompt : str):
+        output = ""
+        client = OpenAI(
+            api_key=self.groq_key,
+            base_url="https://api.groq.com/openai/v1"
+        )
+
+        code = prompt
+
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        return response.choices[0].message.content
+
+    def _review_code(self, code : str):
+        cleaned = self._clean_code(code)
+
+        syntax_error = self._check_syntax(code)
+
+        print("===== CODE =====")
+        print(cleaned)
+
+        if syntax_error:
+            print("\n===== SYNTAX ERROR DETECTED =====")
+            print(syntax_error)
+            return
+
+        prompt = f"""
+You are a strict Python code reviewer.
+
+Rules:
+- Only report objective issues visible in the code.
+- Do NOT suggest optional improvements or stylistic preferences.
+- Ignore optional PEP8 suggestions such as type hints or docstring formats.
+- If no issues exist in a section, write "None detected".
+- Maximum 2 issues per section.
+
+Format:
+
+### Section name
+Issue — exact line from code
+
+Code to review:
+
+```python
+{cleaned}"""
+        
+        return self._prompt_groq(prompt)
 
     def review(self, file_path : str = None):
         if file_path == None:
@@ -68,7 +126,7 @@ class Reviewer:
         try:
             f = open(file_path, "r")
             return {
-                'review': self._review_string(f.read())
+                'review': self._review_code(f.read())
             }
         except FileNotFoundError:
             print('Review failed, file could not be found')
